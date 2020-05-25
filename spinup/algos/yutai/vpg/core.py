@@ -26,3 +26,50 @@ def mlp(sizes: List[int],
         activation_fn = hidden_activation if i < len(sizes) - 2 else output_activation
         layers.extend([nn.Linear(sizes[i], sizes[i+1]), activation_fn()])
         return nn.Sequential(*layers)
+
+
+class Actor(nn.Module):
+    def _distribution(self, obs):
+        raise NotImplementedError
+    def _log_prob_from_distribution(self, pi, act):
+        raise NotImplementedError
+
+    def forward(self, obs, act=None):
+        pi = self._distribution(obs)
+        log_prob_a = self._log_prob_from_distribution(pi, act) if act is not None else None
+        return pi, log_prob_a
+
+class MLPCategoricalActor(Actor):
+    def __init__(self,
+                 obs_dim: int,
+                 act_dim: int,
+                 hidden_sizes: List[int],
+                 activation: Optional[Callable]):
+        super().__init__()
+        self.net = mlp([obs_dim] + hidden_sizes + [act_dim], activation)
+
+    def _distribution(self, obs):
+        logits = self.net(obs)
+        return Categorical(logits=logits)
+    
+    def _log_prob_from_distribution(self, pi, act):
+       return pi.log_prob(act) 
+
+class MLPGaussianActor(Actor):
+    def __init__(self,
+                 obs_dim: int,
+                 act_dim: int,
+                 hidden_sizes: List[int],
+                 activation: Optional[Callable]):
+        super().__init__()
+        log_std = -0.5 * np.ones(act_dim, dtype=np.float32)
+        self.log_std = nn.Parameter(torch.as_tensor(log_std))
+        self.net = mlp([obs_dim] + list(hidden_sizes) + [act_dim], activation)
+
+    def _distribution(self, obs):
+        mu = self.net(obs) #long live universal approximation theorem
+        std = torch.exp(self.log_std)
+        return Normal(mu, std)
+
+    def _log_prob_from_distribution(self, pi, act):
+        return pi.log_prob(act).sum(axis=-1) # perhaps squeeze?
