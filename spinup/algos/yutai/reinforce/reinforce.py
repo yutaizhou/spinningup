@@ -1,5 +1,5 @@
 """
-SPG: Stupid/Simple Policy Gradient
+REINFORCE: Monte Carlo PG
 
 The most basic form of policy gradient. Taken from examples.pytorch.pg_math
 Thanks for the great explanation, Joshua :) 

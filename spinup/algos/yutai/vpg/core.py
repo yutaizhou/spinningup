@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 from torch.distributions.normal import Normal
 from torch.distributions.categorical import Categorical
-from typing import Tuple, List
+from typing import Sequence, Tuple, List, Callable
 
 def combined_shape(length: int, shape = None) -> Tuple:
     if shape is None: 
@@ -42,11 +42,11 @@ class Actor(nn.Module):
 class MLPCategoricalActor(Actor):
     def __init__(self,
                  obs_dim: int,
-                 act_dim: int,
+                 num_actions: int,
                  hidden_sizes: List[int],
-                 activation: Optional[Callable]):
+                 activation: Callable):
         super().__init__()
-        self.net = mlp([obs_dim] + hidden_sizes + [act_dim], activation)
+        self.net = mlp([obs_dim] + hidden_sizes + [num_actions], activation)
 
     def _distribution(self, obs):
         logits = self.net(obs)
@@ -59,8 +59,8 @@ class MLPGaussianActor(Actor):
     def __init__(self,
                  obs_dim: int,
                  act_dim: int,
-                 hidden_sizes: List[int],
-                 activation: Optional[Callable]):
+                 hidden_sizes: Sequence[int],
+                 activation: Callable):
         super().__init__()
         log_std = -0.5 * np.ones(act_dim, dtype=np.float32)
         self.log_std = nn.Parameter(torch.as_tensor(log_std))
@@ -73,3 +73,46 @@ class MLPGaussianActor(Actor):
 
     def _log_prob_from_distribution(self, pi, act):
         return pi.log_prob(act).sum(axis=-1) # perhaps squeeze?
+
+class MLPCritic(nn.Module):
+    def __init__(self,
+                 obs_dim: int,
+                 hidden_sizes: Sequence[int],
+                 activation: Callable):
+        super().__init__()
+        self.net = mlp([obs_dim] + list(hidden_sizes) + [1], activation)
+
+    def forward(self, obs):
+        return torch.squeeze(self.net(obs), -1)
+
+class MLPActorCritic(nn.Module):
+    def __init__(self,
+                 obs_space,
+                 act_space,
+                 hidden_sizes: Sequence[int],
+                 activation: Optional[Callable] = nn.Tanh):
+        super().__init__()
+        obs_dim: int = obs_space.shape[0]
+
+        # build policy 
+        if isinstance(act_space, Box): # Continuous action spaces
+            act_dim = act_space.shape[0]
+            self.actor = MLPGaussianActor(obs_dim, act_dim, hidden_sizes, activation)
+        if isinstance(act_space, Discrete): # Discrete action spaces
+            num_actions = act_space.n
+            self.actor = MLPCategoricalActor(obs_dim, num_actions, hidden_sizes, activation)
+        
+        # build value function
+        self.critic = MLPCritic(obs_dim, hidden_sizes, activation)
+
+    def step(self, obs):
+        with torch.no_grad():
+            pi = self.actor._distribution(obs)
+            a = pi.sample()
+            logprob_a = self.actor._log_prob_from_distribution(pi, a)
+            v = self.critic(obs)
+
+        return a.numpy(), v.numpy(), logprob_a.numpy()
+    
+    def act(self, obs):
+        return self.step(obs)[0]
