@@ -146,8 +146,8 @@ class VPG:
 
 		# policy loss
 		pi, logprob = self.ac.actor(obs, act)
-		loss_actor = -(logprob_old * adv).mean()
-		
+		loss_actor = -(logprob * adv).mean()
+
 		# extra info
 		approx_kl = (logprob_old - logprob).mean().item()
 		entropy = pi.entropy().mean().item()
@@ -182,7 +182,7 @@ class VPG:
 			self.critic_optimizer.step()
 
 		#log 
-		kl, entropy = actor_info['kl'], actor_info['ent']
+		kl, entropy = actor_info['kl'], actor_info['entropy']
 		self.logger.store(LossPi=actor_loss_old, LossV=critic_loss_old,
 						  KL=kl, Entropy=entropy,
 						  DeltaLossV=(critic_loss.item() - critic_loss_old),
@@ -217,7 +217,8 @@ class VPG:
 
 				if terminal or epoch_ended:
 					if epoch_ended and not terminal:
-						print(f"Warning: trajectory cut off by epoch at {episode_len} steps")
+						# print(f"Warning: trajectory cut off by epoch at {episode_len} steps")
+						pass
 					if timeout or epoch_ended:
 						_, v, _ = self.ac.step(torch.as_tensor(obs, dtype=torch.float32))
 					else:
@@ -237,7 +238,7 @@ class VPG:
 			self.logger.log_tabular('EpRet', with_min_and_max=True)
 			self.logger.log_tabular('EpLen', average_only=True)
 			self.logger.log_tabular('VVals', with_min_and_max=True)
-			self.logger.log_tabular('TotalEnvInteracts', (epoch+1)*steps_per_epoch)
+			self.logger.log_tabular('TotalEnvInteracts', (epoch+1)*self.steps_per_epoch)
 			self.logger.log_tabular('LossPi', average_only=True)
 			self.logger.log_tabular('LossV', average_only=True)
 			self.logger.log_tabular('DeltaLossPi', average_only=True)
