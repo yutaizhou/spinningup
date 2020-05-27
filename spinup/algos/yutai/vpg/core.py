@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 from torch.distributions.normal import Normal
 from torch.distributions.categorical import Categorical
-from typing import Sequence, Tuple, List, Callable
+from typing import Sequence, Tuple, List, Callable, Optional
 
 def combined_shape(length: int, shape = None) -> Tuple:
     if shape is None: 
@@ -25,7 +25,7 @@ def mlp(sizes: List[int],
     for i in range(len(sizes) - 1): # the in-betweens
         activation_fn = hidden_activation if i < len(sizes) - 2 else output_activation
         layers.extend([nn.Linear(sizes[i], sizes[i+1]), activation_fn()])
-        return nn.Sequential(*layers)
+    return nn.Sequential(*layers)
 
 
 class Actor(nn.Module):
